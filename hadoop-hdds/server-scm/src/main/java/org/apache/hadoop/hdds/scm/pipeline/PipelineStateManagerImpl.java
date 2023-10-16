@@ -45,7 +45,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 /**
  * Implementation of pipeline state manager.
  * PipelineStateMap class holds the data structures related to pipeline and its
- * state. All the read and write operations in PipelineStateMap are protected
+ * state. States of pipelineStateMap and pipelineStore are protected
  * by a read write lock.
  */
 @ThreadSafe
