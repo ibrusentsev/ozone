@@ -32,6 +32,8 @@ import org.apache.hadoop.hdds.utils.db.TableIterator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.annotation.concurrent.GuardedBy;
+import javax.annotation.concurrent.ThreadSafe;
 import java.io.IOException;
 import java.lang.reflect.Proxy;
 import java.util.Collection;
@@ -46,19 +48,22 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
  * state. All the read and write operations in PipelineStateMap are protected
  * by a read write lock.
  */
+@ThreadSafe
 public class PipelineStateManagerImpl implements PipelineStateManager {
 
   private static final Logger LOG =
       LoggerFactory.getLogger(PipelineStateManagerImpl.class);
 
-  private PipelineMap pipelineStateMap;
   private final NodeManager nodeManager;
-  private Table<PipelineID, Pipeline> pipelineStore;
   private final DBTransactionBuffer transactionBuffer;
-
   // Protect potential contentions between RaftServer and PipelineManager.
   // See https://issues.apache.org/jira/browse/HDDS-4560
   private final ReadWriteLock lock = new ReentrantReadWriteLock();
+
+  @GuardedBy("ReadWriteLock lock")
+  private PipelineMap pipelineStateMap;
+  @GuardedBy("ReadWriteLock lock")
+  private Table<PipelineID, Pipeline> pipelineStore;
 
   public PipelineStateManagerImpl(
       Table<PipelineID, Pipeline> pipelineStore, NodeManager nodeManager,
@@ -93,7 +98,7 @@ public class PipelineStateManagerImpl implements PipelineStateManager {
   public void addPipeline(HddsProtos.Pipeline pipelineProto)
       throws IOException {
     Pipeline pipeline = Pipeline.getFromProtobuf(pipelineProto);
-    lock.writeLock().lock();
+    lock.readLock().lock();
     try {
       if (pipelineStore != null) {
         pipelineStateMap.addPipeline(pipeline);
@@ -102,7 +107,7 @@ public class PipelineStateManagerImpl implements PipelineStateManager {
             .addToBuffer(pipelineStore, pipeline.getId(), pipeline);
       }
     } finally {
-      lock.writeLock().unlock();
+      lock.readLock().unlock();
     }
   }
 
@@ -110,11 +115,11 @@ public class PipelineStateManagerImpl implements PipelineStateManager {
   public void addContainerToPipeline(
       PipelineID pipelineId, ContainerID containerID)
       throws IOException {
-    lock.writeLock().lock();
+    lock.readLock().lock();
     try {
       pipelineStateMap.addContainerToPipeline(pipelineId, containerID);
     } finally {
-      lock.writeLock().unlock();
+      lock.readLock().unlock();
     }
   }
 
@@ -122,11 +127,11 @@ public class PipelineStateManagerImpl implements PipelineStateManager {
   public void addContainerToPipelineSCMStart(
           PipelineID pipelineId, ContainerID containerID)
           throws IOException {
-    lock.writeLock().lock();
+    lock.readLock().lock();
     try {
       pipelineStateMap.addContainerToPipelineSCMStart(pipelineId, containerID);
     } finally {
-      lock.writeLock().unlock();
+      lock.readLock().unlock();
     }
   }
 
@@ -236,7 +241,7 @@ public class PipelineStateManagerImpl implements PipelineStateManager {
     PipelineID pipelineID = PipelineID.getFromProtobuf(pipelineIDProto);
     try {
       Pipeline pipeline;
-      lock.writeLock().lock();
+      lock.readLock().lock();
       try {
         pipeline = pipelineStateMap.removePipeline(pipelineID);
         nodeManager.removePipeline(pipeline);
@@ -244,7 +249,7 @@ public class PipelineStateManagerImpl implements PipelineStateManager {
           transactionBuffer.removeFromBuffer(pipelineStore, pipelineID);
         }
       } finally {
-        lock.writeLock().unlock();
+        lock.readLock().unlock();
       }
     } catch (PipelineNotFoundException pnfe) {
       LOG.warn("Pipeline {} is not found in the pipeline Map. Pipeline"
@@ -256,7 +261,7 @@ public class PipelineStateManagerImpl implements PipelineStateManager {
   public void removeContainerFromPipeline(
       PipelineID pipelineID, ContainerID containerID) throws IOException {
     try {
-      lock.writeLock().lock();
+      lock.readLock().lock();
       try {
         // Typically, SCM can send a pipeline close Action to datanode and
         // receive pipelineCloseAction to close the pipeline which will remove
@@ -269,7 +274,7 @@ public class PipelineStateManagerImpl implements PipelineStateManager {
         // bring down the SCM. Ignoring it here.
         pipelineStateMap.removeContainerFromPipeline(pipelineID, containerID);
       } finally {
-        lock.writeLock().unlock();
+        lock.readLock().unlock();
       }
     } catch (PipelineNotFoundException pnfe) {
       LOG.info("Pipeline {} is not found in the pipeline2ContainerMap. Pipeline"
@@ -285,7 +290,7 @@ public class PipelineStateManagerImpl implements PipelineStateManager {
     Pipeline.PipelineState newPipelineState =
         Pipeline.PipelineState.fromProtobuf(newState);
     try {
-      lock.writeLock().lock();
+      lock.readLock().lock();
       try {
         // null check is here to prevent the case where SCM store
         // is closed but the staleNode handlers/pipeline creations
@@ -296,7 +301,7 @@ public class PipelineStateManagerImpl implements PipelineStateManager {
               .addToBuffer(pipelineStore, pipelineID, getPipeline(pipelineID));
         }
       } finally {
-        lock.writeLock().unlock();
+        lock.readLock().unlock();
       }
     } catch (PipelineNotFoundException pnfe) {
       LOG.warn("Pipeline {} is not found in the pipeline Map. Pipeline"

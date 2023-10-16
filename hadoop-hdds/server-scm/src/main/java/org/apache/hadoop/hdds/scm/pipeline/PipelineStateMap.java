@@ -24,6 +24,7 @@ import org.apache.hadoop.hdds.protocol.DatanodeDetails;
 import org.apache.hadoop.hdds.scm.container.ContainerID;
 import org.apache.hadoop.hdds.scm.pipeline.Pipeline.PipelineState;
 
+import javax.annotation.concurrent.ThreadSafe;
 import java.io.IOException;
 import java.util.Collection;
 import java.util.List;
@@ -42,6 +43,7 @@ import static java.lang.String.format;
 /**
  * This is a thread-safe implementation of {@link PipelineMap}.
  */
+@ThreadSafe
 public class PipelineStateMap implements PipelineMap {
 
   private final Map<PipelineID, PipelineWithContainers> pipelines =
