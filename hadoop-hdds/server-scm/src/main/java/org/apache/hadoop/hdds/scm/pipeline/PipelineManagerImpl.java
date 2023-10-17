@@ -286,7 +286,7 @@ public class PipelineManagerImpl implements PipelineManager {
       throws IOException {
     HddsProtos.Pipeline pipelineProto = pipeline.getProtobufMessage(
         ClientVersion.CURRENT_VERSION);
-    acquireWriteLock();
+    acquireReadLock();
     try {
       stateManager.addPipeline(pipelineProto);
     } catch (IOException ex) {
@@ -294,7 +294,7 @@ public class PipelineManagerImpl implements PipelineManager {
       metrics.incNumPipelineCreationFailed();
       throw ex;
     } finally {
-      releaseWriteLock();
+      releaseReadLock();
     }
     recordMetricsForPipeline(pipeline);
   }
@@ -419,6 +419,7 @@ public class PipelineManagerImpl implements PipelineManager {
   public void openPipeline(PipelineID pipelineId)
       throws IOException {
     HddsProtos.PipelineID pipelineIdProtobuf = pipelineId.getProtobuf();
+    // as this operation must be atomic, write lock is used
     acquireWriteLock();
     final Pipeline pipeline;
     try {
@@ -447,14 +448,14 @@ public class PipelineManagerImpl implements PipelineManager {
       throws IOException {
     pipelineFactory.close(pipeline.getType(), pipeline);
     HddsProtos.PipelineID pipelineID = pipeline.getId().getProtobuf();
-    acquireWriteLock();
+    acquireReadLock();
     try {
       stateManager.removePipeline(pipelineID);
     } catch (IOException ex) {
       metrics.incNumPipelineDestroyFailed();
       throw ex;
     } finally {
-      releaseWriteLock();
+      releaseReadLock();
     }
     LOG.info("Pipeline {} removed.", pipeline);
     metrics.incNumPipelineDestroyed();
@@ -500,12 +501,12 @@ public class PipelineManagerImpl implements PipelineManager {
     closeContainersForPipeline(pipelineID);
 
     if (!pipeline.isClosed()) {
-      acquireWriteLock();
+      acquireReadLock();
       try {
         stateManager.updatePipelineState(pipelineIDProtobuf,
             HddsProtos.PipelineState.PIPELINE_CLOSED);
       } finally {
-        releaseWriteLock();
+        releaseReadLock();
       }
       LOG.info("Pipeline {} moved to CLOSED state", pipeline);
     }
@@ -663,12 +664,12 @@ public class PipelineManagerImpl implements PipelineManager {
   public void activatePipeline(PipelineID pipelineID)
       throws IOException {
     HddsProtos.PipelineID pipelineIDProtobuf = pipelineID.getProtobuf();
-    acquireWriteLock();
+    acquireReadLock();
     try {
       stateManager.updatePipelineState(pipelineIDProtobuf,
           HddsProtos.PipelineState.PIPELINE_OPEN);
     } finally {
-      releaseWriteLock();
+      releaseReadLock();
     }
   }
 
@@ -682,12 +683,12 @@ public class PipelineManagerImpl implements PipelineManager {
   public void deactivatePipeline(PipelineID pipelineID)
       throws IOException {
     HddsProtos.PipelineID pipelineIDProtobuf = pipelineID.getProtobuf();
-    acquireWriteLock();
+    acquireReadLock();
     try {
       stateManager.updatePipelineState(pipelineIDProtobuf,
           HddsProtos.PipelineState.PIPELINE_DORMANT);
     } finally {
-      releaseWriteLock();
+      releaseReadLock();
     }
   }
 

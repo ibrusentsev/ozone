@@ -166,12 +166,12 @@ public final class ReconPipelineManager extends PipelineManagerImpl {
   @VisibleForTesting
   public void addPipeline(Pipeline pipeline)
       throws IOException {
-    acquireWriteLock();
+    acquireReadLock();
     try {
       getStateManager().addPipeline(
           pipeline.getProtobufMessage(ClientVersion.CURRENT_VERSION));
     } finally {
-      releaseWriteLock();
+      releaseReadLock();
     }
   }
 }
